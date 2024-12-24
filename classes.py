@@ -1,5 +1,6 @@
 import re
 
+
 class Integer:
     """
     Класс для работы с целыми числами, представленными в виде строки.
@@ -47,7 +48,7 @@ class Integer:
         if isinstance(other, Integer):
             return str(self) == str(other)
         return False
-    
+
 
 class Natural:
     """
@@ -89,7 +90,8 @@ class Natural:
         if isinstance(other, Natural):
             return str(self) == str(other)
         return False
-    
+
+
 class Rational:
     """
     Класс для работы с рациональными числами.
@@ -119,121 +121,75 @@ class Rational:
         if isinstance(other, Rational):
             return self.numerator == other.numerator and self.denominator == other.denominator
         return False
-    
-class PolynomialNode:
-    """
-    Узел двусвязного списка, представляющий одночлен многочлена.
-    """
-
-    def __init__(self, degree: Natural = Natural("0"), coefficient: Rational = Rational(Integer("0"))):
-        """
-        Инициализация узла.
-
-        :param degree: Степень одночлена (Natural).
-        :param coefficient: Коэффициент одночлена (Rational).
-        """
-        self.degree = degree
-        self.coefficient = coefficient
-        self.prev = None
-        self.next = None
 
 
 class Polynomial:
     """
-    Класс для работы с многочленами, реализованными на основе двусвязного списка.
+    Класс для работы с многочленами на основе словаря.
     """
 
     def __init__(self):
-        """Инициализация пустого многочлена."""
-        self.head = PolynomialNode()
+        """Инициализация пустого многочлена"""
+        self.terms = {}  # {degree (int): coefficient (Rational)}
+        self._degree = None
+        self._leading_coeff = None
+
+    def add_term(self, degree: Natural, coefficient: Rational):
+        """Добавление/обновление члена многочлена"""
+        deg = int(degree)
+        if int(coefficient.numerator) == 0:
+            self.terms.pop(deg, None)
+        else:
+            self.terms[deg] = coefficient
+
+        # Инвалидация кэша
+        self._degree = None
+        self._leading_coeff = None
 
     def __str__(self):
-        terms = {}
-        current = self.head
-        while current:
-            # Пропускаем нулевые коэффициенты
-            if int(current.coefficient.numerator) != 0:
-                terms[int(current.degree)] = current.coefficient
-            current = current.next
-
-        if not terms:
+        """Строковое представление многочлена"""
+        if not self.terms:
             return "0"
 
-        sorted_degrees = sorted(terms.keys(), reverse=True)
         result = []
+        for degree in sorted(self.terms.keys(), reverse=True):
+            coeff = self.terms[degree]
 
-        for i, degree in enumerate(sorted_degrees):
-            coeff = terms[degree]
+            if int(coeff.numerator) == 0:
+                continue
 
-            # Определяем знак для вывода
-            # Для первого члена просто минус без пробела, для остальных с пробелами
-            if i == 0:
-                sign = "-" if int(coeff.numerator) < 0 else ""
-            else:
-                sign = " - " if int(coeff.numerator) < 0 else " + "
+            sign = " + " if int(coeff.numerator) > 0 and result else ""
+            if int(coeff.numerator) < 0:
+                sign = " - " if result else "-"
 
-            # Модуль числителя
             abs_num = abs(int(coeff.numerator))
-
-            # Формируем строку коэффициента
             if int(coeff.denominator) != 1:
                 coeff_str = f"{abs_num}/{coeff.denominator}"
             else:
                 coeff_str = str(abs_num)
 
-            # Формируем одночлен
-            if int(degree) > 1:
-                monomial = f"{coeff_str}x^{degree}"
-            elif int(degree) == 1:
-                monomial = f"{coeff_str}x"
-            else:  # degree == 0
-                monomial = coeff_str
-
-            result.append(sign + monomial)
-
-        return ''.join(result)
-
-    def add_term(self, degree: Natural, coefficient: Rational):
-        if int(coefficient.numerator) == 0:
-            return
-
-        current = self.head
-        while current:
-            if current.degree == degree:
-                # Корректная сумма дробей:
-                new_num = (int(current.coefficient.numerator) * int(coefficient.denominator)
-                        + int(coefficient.numerator) * int(current.coefficient.denominator))
-                new_den = (int(current.coefficient.denominator) * int(coefficient.denominator))
-
-                current.coefficient = Rational(
-                    Integer(str(new_num)),
-                    Natural(str(new_den))
-                )
-                return
-            elif int(current.degree) > int(degree) and current.next:
-                current = current.next
+            if degree > 1:
+                term = f"{coeff_str}x^{degree}"
+            elif degree == 1:
+                term = f"{coeff_str}x"
             else:
-                new_node = PolynomialNode(degree, coefficient)
-                new_node.next = current.next
-                new_node.prev = current
-                if current.next:
-                    current.next.prev = new_node
-                current.next = new_node
-                return
+                term = coeff_str
+
+            result.append(sign + term)
+
+        return "".join(result)
 
     def build_from_string(self, input_str: str):
-        # Предварительно удаляем все пробелы и символы умножения
+        """Построение многочлена из строки"""
         input_str = input_str.replace(' ', '').replace('*', '')
-        # Удаляем все скобки из строки перед разбором
         input_str = input_str.replace('(', '').replace(')', '')
-        
+
         terms = re.split(r'(?=[+-])', input_str)
         for term in terms:
             if not term:
                 continue
             term = term.lstrip('+')
-            
-            # Определяем коэффициент и степень
+
             if 'x' in term:
                 if '^' in term:
                     coeff, _, degree = term.partition('x^')
@@ -246,12 +202,10 @@ class Polynomial:
             else:
                 coeff = term
                 degree = "0"
-                
-            # Разбираем дробь или целое число
+
             try:
                 if '/' in coeff:
                     num, den = coeff.split('/')
-                    # Обрабатываем отрицательный знак
                     is_negative = num.startswith('-')
                     num = num.lstrip('-')
                     numerator = -int(num) if is_negative else int(num)
@@ -259,84 +213,41 @@ class Polynomial:
                 else:
                     numerator = int(coeff)
                     denominator = 1
-                    
+
                 rational_coeff = Rational(Integer(str(numerator)), Natural(str(denominator)))
-                self.add_term(Natural(degree), rational_coeff)
-                
+                self.add_term(Natural(str(degree)), rational_coeff)
+
             except ValueError as e:
                 raise ValueError(f"Ошибка при разборе коэффициента '{coeff}': {str(e)}")
 
     def getCoeff(self, deg: Natural) -> Rational:
-        if not isinstance(deg, Natural):
-            raise ValueError("Степень должна быть объектом класса Natural.")
-        
-        current = self.head
-        while current:
-            if current.degree == deg:
-                return current.coefficient
-            current = current.next
-        
-        return Rational(Integer("0"), Natural("1"))        
-    
+        """Получение коэффициента при заданной степени"""
+        degree = int(deg)
+        return self.terms.get(degree, Rational(Integer("0"), Natural("1")))
+
+    def get_degree(self) -> Natural:
+        """Получение степени многочлена"""
+        if self._degree is None:
+            self._degree = max(self.terms.keys()) if self.terms else 0
+        return Natural(str(self._degree))
+
+    def get_leading_coeff(self) -> Rational:
+        """Получение старшего коэффициента"""
+        if self._leading_coeff is None:
+            deg = self.get_degree()
+            self._leading_coeff = self.terms.get(int(deg), Rational(Integer("0")))
+        return self._leading_coeff
+
     def __eq__(self, other):
         if not isinstance(other, Polynomial):
             return False
-            
-        # Преобразуем оба многочлена в строки для сравнения
-        return str(self) == str(other)        
+        return str(self) == str(other)
+
 
 def create_polynomial(input_str: str) -> Polynomial:
-    """
-    Утилита для создания многочлена из строки.
-
-    :param input_str: Строка, представляющая многочлен.
-    :return: Экземпляр Polynomial.
-    """
+    """Утилита для создания многочлена из строки"""
     poly = Polynomial()
+    if input_str == "0":
+        return poly
     poly.build_from_string(input_str)
     return poly
-
-
-# poly1 = create_polynomial("100x^243 - 30000x + 6789")
-# print(f"{poly1}")
-# poly2 = create_polynomial("x^3 - x + 2")
-# poly3 = create_polynomial("-2x^4 + 7")
-# print(f"Polynomial from '3x^2 + 4x - 5': {poly1}")
-# print(f"Polynomial from 'x^3 - x + 2': {poly2}")
-# print(f"Polynomial from '-2x^4 + 7': {poly3}")
-
-# def test_polynomial():
-#     print("=== Тестирование класса Polynomial ===")
-#
-#     try:
-#         # Тест создания многочлена из строки
-#         print("\nСоздание многочлена из строки: '3x^2 + 4x - 5'")
-#         poly1 = create_polynomial("3x^2 + 4x - 5")
-#         print(f"Многочлен 1: {poly1}")
-#
-#         # Тест добавления члена
-#         print("\nДобавление члена 2x^3 в многочлен")
-#         poly1.add_term(Natural("3"), Rational(Integer("2")))  # Добавляем 2x^3
-#         print(f"После добавления: {poly1}")
-#
-#         # Тест создания второго многочлена
-#         print("\nСоздание второго многочлена из строки: 'x^3 - x + 2'")
-#         poly2 = create_polynomial("x^3 - x + 2")
-#         print(f"Многочлен 2: {poly2}")
-#
-#         # Проверка строкового представления многочленов
-#         print("\nСтроковое представление многочленов:")
-#         print(f"Многочлен 1: {str(poly1)}")
-#         print(f"Многочлен 2: {str(poly2)}")
-#
-#         poly3 = create_polynomial("6")
-#         poly3.add_term(Natural("0"), Rational(Integer("4")))
-#         print(poly3)
-#
-#     except Exception as e:
-#         print(f"Ошибка при тестировании: {e}")
-#
-#
-# if __name__ == "__main__":
-#     test_polynomial()
-
